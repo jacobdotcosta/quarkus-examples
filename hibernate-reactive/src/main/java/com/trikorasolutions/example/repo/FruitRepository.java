@@ -10,6 +10,7 @@ import java.util.List;
 
 @ApplicationScoped
 public class FruitRepository {
+
   @Inject
   Mutiny.SessionFactory sf;
 

@@ -44,6 +44,8 @@ public class FruitResourceTest {
             "name", Matchers.hasItems(appleFruit.name, pearFruit.name)
             , "description", Matchers.hasItems(appleFruit.description, pearFruit.description)
         );
+    fruitResources.delete(appleFruit.name);
+    fruitResources.delete(pearFruit.name);
   }
 
   @Test
@@ -94,6 +96,11 @@ public class FruitResourceTest {
         .body("name", is(pineappleFruit.name), "ripen", Matchers.is(false));
     fruitResources.get(plumFruit.name).then().statusCode(OK.getStatusCode())
         .body("name", is(plumFruit.name), "ripen", Matchers.is(true));
+
+    fruitResources.delete(apricotFruit.name);
+    fruitResources.delete(lemonFruit.name);
+    fruitResources.delete(pineappleFruit.name);
+    fruitResources.delete(plumFruit.name);
   }
 
 

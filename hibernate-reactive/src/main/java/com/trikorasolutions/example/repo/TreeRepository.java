@@ -14,6 +14,7 @@ import java.util.List;
 @ApplicationScoped
 public class TreeRepository {
   private static final Logger LOGGER = LoggerFactory.getLogger(TreeRepository.class);
+
   @Inject
   Mutiny.SessionFactory sf;
 

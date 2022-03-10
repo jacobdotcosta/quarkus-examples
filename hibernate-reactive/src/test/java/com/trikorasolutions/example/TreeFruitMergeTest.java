@@ -10,78 +10,68 @@ import com.trikorasolutions.example.dto.TreeDto;
 import com.trikorasolutions.example.model.Fruit;
 import com.trikorasolutions.example.model.Tree;
 import io.quarkus.test.junit.QuarkusTest;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import javax.inject.Inject;
 import javax.ws.rs.core.MediaType;
 import org.hamcrest.CoreMatchers;
-import org.hibernate.reactive.mutiny.Mutiny;
-import org.junit.jupiter.api.BeforeEach;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @QuarkusTest
-public class KindOfPersistedEntitiesTest {
+public class TreeFruitMergeTest {
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(TreeFruitMergeTest.class);
+
   @Inject
-  Mutiny.SessionFactory sf;
+  private FruitResources fruitResources;
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(KindOfPersistedEntitiesTest.class);
-
-  @BeforeEach
-  public void clearDatabase() {
-
-    LOGGER.warn("delete from database");
-    Integer res = sf.withTransaction((s, t) -> s.createQuery("DELETE FROM Fruit").executeUpdate())
-        .await()
-        .atMost(Duration.ofSeconds(30));
-    Integer res2 = sf.withTransaction((s, t) -> s.createQuery("DELETE FROM Tree").executeUpdate())
-        .await()
-        .atMost(Duration.ofSeconds(30));
-    LOGGER.warn("{} records removed", res + res2);
-  }
+  @Inject
+  private TreeResources treeResources;
 
   /**
    * <p>Add existing fruits to existing tree.</p>
    */
-//  @Test
+  @Test
   public void addExistingFruitsToExistingTree() {
-    // Persist the fruits
-    given().when().body(new Fruit("pear", "Pear", "Rosaceae", false))
-        .contentType(MediaType.APPLICATION_JSON)
-        .post("/fruitreact/create").then().statusCode(OK.getStatusCode());
-    given().when().body(new Fruit("apple", "Apple", "Rosaceae", false))
-        .contentType(MediaType.APPLICATION_JSON)
-        .post("/fruitreact/create").then().statusCode(OK.getStatusCode());
+    final Fruit appleFruit = new Fruit("apple", "Apple", "Rosaceae", false);
+    final Fruit pearFruit = new Fruit("pear", "Pear", "Rosaceae", false);
+    final Tree tree = new Tree("addExistingFruitsToExistingTree");
+    fruitResources.create(pearFruit);
+    fruitResources.create(appleFruit);
+    treeResources.create(tree);
 
-    // Persist the tree
-    Tree tree = new Tree("addExistingFruitsToExistingTree");
-    given().when().body(tree).contentType(MediaType.APPLICATION_JSON).post("/tree/create").then()
-        .statusCode(OK.getStatusCode()).body("name", CoreMatchers.is("alreadyPersistedTreeTest"));
-
-    // Ensure the tree and the fruits have been UPDATED
+    // Add fruits to tree.
     given().when().body(tree).contentType(MediaType.APPLICATION_JSON).post("/tree/persist/Rosaceae")
         .then().statusCode(OK.getStatusCode())
-        .body("name", is(tree.name), "fruits.size()", is(2), "fruits.name",
+        .body("name", is(tree.name), "fruits.size()", Matchers.greaterThanOrEqualTo(2),
+            "fruits.name",
             hasItems("pear", "apple"));
 
-    // Ensure that the fruits persisted when persisting the tree are in th db
-    given().when().get("/fruitreact/name/pear").then().statusCode(OK.getStatusCode())
+    fruitResources.get(pearFruit.name).then().statusCode(OK.getStatusCode())
         .body("name", is("pear"), "tree", is(tree.name));
-    given().when().get("/fruitreact/name/apple").then().statusCode(OK.getStatusCode())
+    fruitResources.get(appleFruit.name).then().statusCode(OK.getStatusCode())
         .body("name", is("apple"), "tree", is(tree.name));
+
+    fruitResources.delete(pearFruit.name);
+    fruitResources.delete(appleFruit.name);
   }
 
-//  @Test
-  public void NotPersistedTreeAndFruitsTest() { // Tree does not exist, Fruits do not exist
-
-    TreeDto tree = new TreeDto("NotPersistedTreeAndFruitsTest");
+  /**
+   * Tree does not exist, Fruits do not exist.
+   */
+  @Test
+  public void persistNewTreeAndNewFruits() {
+    final TreeDto tree = new TreeDto("persistNewTreeAndNewFruits");
+    final FruitDto orangeFruit = new FruitDto("orange", "Updated-Pear", "persistFam1", true);
+    final FruitDto carrotNotFruit = new FruitDto("Carrot", "not a fruit", "persistFam1", true);
 
     // In this example, fruits are not related with the tree.
     final List<FruitDto> fruits = new ArrayList<>() {{
-      add(new FruitDto("orange", "Updated-Pear", "persistFam1", true));
-      add(new FruitDto("Carrot", "not a fruit", "persistFam1", true));
+      add(orangeFruit);
+      add(carrotNotFruit);
     }};
     tree.setFruits(fruits);
 
@@ -89,14 +79,18 @@ public class KindOfPersistedEntitiesTest {
     given().when().body(tree).contentType(MediaType.APPLICATION_JSON).post("/tree/persistall")
         .then()
         .statusCode(OK.getStatusCode())
-        .body("name", is(tree.name), "fruits.size()", is(2), "fruits.name",
-            hasItems("orange", "Carrot"));
+        .body("name", is(tree.name), "fruits.size()", Matchers.greaterThanOrEqualTo(2),
+            "fruits.name",
+            hasItems(orangeFruit.name, carrotNotFruit.name));
 
     // Ensure that the fruits persisted when persisting the tree are in th db
-    given().when().get("/fruitreact/name/orange").then().statusCode(OK.getStatusCode())
+    fruitResources.get(orangeFruit.name).then().statusCode(OK.getStatusCode())
         .body("name", CoreMatchers.is("orange"), "tree", is(tree.name));
-    given().when().get("/fruitreact/name/Carrot").then().statusCode(OK.getStatusCode())
+    fruitResources.get(carrotNotFruit.name).then().statusCode(OK.getStatusCode())
         .body("name", CoreMatchers.is("Carrot"), "tree", is(tree.name));
+
+    fruitResources.delete(orangeFruit.name);
+    fruitResources.delete(carrotNotFruit.name);
   }
 
   /**
@@ -104,54 +98,63 @@ public class KindOfPersistedEntitiesTest {
    */
   @Test
   public void addNewFruitsToExistingTree() {
+    final FruitDto orangeFruit = new FruitDto("orange", "Updated-Pear", "persistFam1", true);
+    final FruitDto carrotNotFruit = new FruitDto("Carrot", "not a fruit", "persistFam1", true);
+    final Tree tree = new Tree("addNewFruitsToExistingTree");
 
-    Tree tree = new Tree("addNewFruitsToExistingTree");
-    // Ensure the tree is persisted
-    given().when().body(tree).contentType(MediaType.APPLICATION_JSON).post("/tree/create").then()
-        .statusCode(OK.getStatusCode()).body("name", CoreMatchers.is(tree.name));
+    treeResources.create(tree).then().statusCode(OK.getStatusCode())
+        .body("name", CoreMatchers.is(tree.name));
 
     // In this example, fruits are not related with the tree.
     final List<FruitDto> fruits = new ArrayList<>() {{
-      add(new FruitDto("orange", "Updated-Pear", "persistFam1", true));
-      add(new FruitDto("Carrot", "not a fruit", "persistFam1", true));
+      add(orangeFruit);
+      add(carrotNotFruit);
     }};
 
     // Ensure the tree is UPDATED and the fruits have been INSERTED
     given().when().body(fruits).contentType(MediaType.APPLICATION_JSON)
         .post(String.format("/tree/addFruitsToTree/%s", tree.name)).then()
         .statusCode(OK.getStatusCode())
-        .body("name", is(tree.name), "fruits.size()", is(2), "fruits.name",
+        .body("name", is(tree.name), "fruits.size()", Matchers.greaterThanOrEqualTo(2),
+            "fruits.name",
             hasItems("orange", "Carrot"));
 
     // Ensure that the fruits persisted when persisting the tree are in th db
-    given().when().get("/fruitreact/name/orange").then().statusCode(OK.getStatusCode())
+    fruitResources.get(orangeFruit.name).then().statusCode(OK.getStatusCode())
         .body("name", CoreMatchers.is("orange"), "tree", is(tree.name));
-    given().when().get("/fruitreact/name/Carrot").then().statusCode(OK.getStatusCode())
+    fruitResources.get(carrotNotFruit.name).then().statusCode(OK.getStatusCode())
         .body("name", CoreMatchers.is("Carrot"), "tree", is(tree.name));
+
+    fruitResources.delete(orangeFruit.name);
+    fruitResources.delete(carrotNotFruit.name);
   }
 
   /**
    * <p>Tree do not exit, fruits exist.</p>
    */
-//  @Test
+  @Test
   public void addExistingFruitsToNewTree() {
-    // Persist the fruits
-    given().when().body(new Fruit("pear", "Pear", "Rosaceae", false)).contentType(MediaType.APPLICATION_JSON)
-      .post("/fruitreact/create").then().statusCode(OK.getStatusCode());
-    given().when().body(new Fruit("apple", "Apple", "Rosaceae", false)).contentType(MediaType.APPLICATION_JSON)
-      .post("/fruitreact/create").then().statusCode(OK.getStatusCode());
-
-    // Create the tree without persisting it
+    final Fruit appleFruit = new Fruit("apple", "Apple", "Rosaceae", false);
+    final Fruit pearFruit = new Fruit("pear", "Pear", "Rosaceae", false);
     Tree tree = new Tree("alreadyPersistedTreeTest");
+    fruitResources.create(pearFruit);
+    fruitResources.create(appleFruit);
 
     // Ensure the tree is INSERTED and the fruits have been UPDATED
-    given().when().body(tree).contentType(MediaType.APPLICATION_JSON).post("/tree/persist/Rosaceae").then()
-      .statusCode(OK.getStatusCode()).body("name", is(tree.name), "fruits.size()", is(2)
-        , "fruits.name", hasItems("pear", "apple"));
+    given().when().body(tree).contentType(MediaType.APPLICATION_JSON).post("/tree/persist/Rosaceae")
+        .then()
+        .statusCode(OK.getStatusCode())
+        .body("name", is(tree.name), "fruits.size()", Matchers.greaterThanOrEqualTo(2)
+            , "fruits.name", hasItems("pear", "apple"));
 
     // Ensure that the fruits persisted when persisting the tree are in th db
-    given().when().get("/fruitreact/name/pear").then().statusCode(OK.getStatusCode()).body("name", is("pear"), "tree",is(tree.name));
-    given().when().get("/fruitreact/name/apple").then().statusCode(OK.getStatusCode()).body("name", is("apple"), "tree",is(tree.name));
+    fruitResources.get(pearFruit.name).then().statusCode(OK.getStatusCode())
+        .body("name", is("pear"), "tree", is(tree.name));
+    fruitResources.get(appleFruit.name).then().statusCode(OK.getStatusCode())
+        .body("name", is("apple"), "tree", is(tree.name));
+
+    fruitResources.delete(pearFruit.name);
+    fruitResources.delete(appleFruit.name);
   }
 
 

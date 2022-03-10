@@ -39,7 +39,7 @@ public class FruitReactiveResourceTest {
     this.delete(pearFruit.name);
     this.create(appleFruit);
     this.create(pearFruit);
-    given().when().get("/fruitreact/listAll").then().statusCode(OK.getStatusCode())
+    given().when().get("/fruit/listAll").then().statusCode(OK.getStatusCode())
         .body("$.size()", Matchers.greaterThanOrEqualTo(2),
             "name", Matchers.hasItems(appleFruit.name, pearFruit.name)
             , "description", Matchers.hasItems(appleFruit.description, pearFruit.description)
@@ -85,7 +85,7 @@ public class FruitReactiveResourceTest {
     this.create(pineappleFruit);
     this.create(plumFruit);
 
-    given().when().put("/fruitreact/ripe/Rosaceae").then().statusCode(OK.getStatusCode());
+    given().when().put("/fruit/ripe/Rosaceae").then().statusCode(OK.getStatusCode());
     this.get(apricotFruit.name).then().statusCode(OK.getStatusCode())
         .body("name", is(apricotFruit.name), "ripen", Matchers.is(true));
     this.get(lemonFruit.name).then().statusCode(OK.getStatusCode())
@@ -97,15 +97,15 @@ public class FruitReactiveResourceTest {
   }
 
   protected Response delete(final String fruit) {
-    return given().when().delete(String.format("/fruitreact/%s", fruit));
+    return given().when().delete(String.format("/fruit/%s", fruit));
   }
 
   protected Response create(final Fruit fruit) {
     return given().when().body(fruit).contentType(MediaType.APPLICATION_JSON)
-        .post("/fruitreact/create");
+        .post("/fruit/create");
   }
 
   protected Response get(final String fruit) {
-    return given().when().get(String.format("/fruitreact/name/%s", fruit));
+    return given().when().get(String.format("/fruit/name/%s", fruit));
   }
 }
